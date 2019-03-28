@@ -38,12 +38,14 @@ If the two transaction share more than one outpoint, then a corresponding number
 | Field Size | Description | Data Type  | Comments |
 | -----------|:-----------:| ----------:|---------:|
 | 1 | version | uint8 | version byte |
-| ? | tx_dig1 | tx_dig | Transaction digest of the one transaction before final double SHA256 hash, corresponding to the doublespent outpoint|
-| ? | tx_dig2 | tx_dig | Transaction digest of a different transaction before final double SHA256 hash, corresponding to the doublespent outpoint|
-| ? | sig1 | char | signature of the double-SHA256 of tx_dig1, extracted from tx1 |
-| ? | sig2 | char | signature of the double-SHA256 of tx_dig2, extracted from tx2 |
+| 184 | tx_pre1 | tx_sig_preimage | Signed data from tx1's CHECKSIG execution (includes outpoint). |
+| 184 | tx_pre2 | tx_sig_preimage | Signed data from tx1's CHECKSIG execution (includes outpoint). |
+| 1 | len1 | uint8 | length of sig1 |
+| ? | sig1 | bytearray | ECDSA/Schnorr signature on the double-SHA256 of tx_pre1, extracted from tx1 |
+| 1 | len2 | uint8 | length of sig2 |
+| ? | sig2 | bytearray | ECDSA/Schnorr signature on the double-SHA256 of tx_pre2, extracted from tx2 |
 
-For tx_dig, refer to https://github.com/bitcoincashorg/bitcoincash.org/blob/master/spec/replay-protected-sighash.md.
+For tx_sig_preimage, refer to https://github.com/bitcoincashorg/bitcoincash.org/blob/master/spec/replay-protected-sighash.md.
 
 A new inventory type is added:
 
@@ -71,7 +73,7 @@ TODO: request message format
 
 The validation of the double spend proof fails if:
 
-* The double spent `outpoint` is not in `tx_dig1` or `tx_dig2` of the proof.
+* The double spent `outpoint` is not in `tx_pre1` or `tx_pre2` of the proof.
 * The signature for any of the transaction digests is invalid.
 
 If validation is successful the node should announce and relay the `dblspndproof` message to its peers.
