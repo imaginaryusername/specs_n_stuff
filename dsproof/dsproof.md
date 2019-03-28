@@ -72,7 +72,8 @@ TODO: request message format
 The validation of the double spend proof fails if:
 
 * The double spent `outpoint` is not in `tx_dig1` or `tx_dig2` of the proof.
-* The signature for any of the transaction digests is invalid.
+* The signature for any of the transaction digests is invalid under current consensus rules (either cryptographically invalid, or fails DERSIG, STRICTENC, LOW_S rules).
+* Ths two halves of the doublespend proof are identical.
 
 If validation is successful the node should announce and relay the `dblspndproof` message to its peers.
 
