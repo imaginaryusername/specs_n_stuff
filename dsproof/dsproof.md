@@ -2,7 +2,7 @@
 
 @im_uname
 WIP
-Last revised: 20190411
+Last revised: 20190412
 
 Author: @im_uname, adapted from Chris Pacia's Double Spend Alert (https://github.com/cpacia/spec/blob/master/double-spend-alerts.md) 
 
@@ -12,10 +12,10 @@ This document describes a new Bitcoin Cash network message that is generated whe
 
 ## Design requirements
 
-A transaction that has its inputs all being from P2PKH or P2SH-multisig outputs, follow prevailing standardness rules and has all signatures signed with SIGHASH_ALL without the ANYONECANPAY flag is hereby referred as "protected transactions".
+A transaction that has its inputs all being from P2PKH or P2SH-multisig outputs, follow prevailing standardness rules and has all signatures signed with SIGHASH_ALL without the ANYONECANPAY flag, and in the case of P2SH-multisig containing all unique pubkeys, is hereby referred as "protected transactions".
 
  
-1. The proof message, by itself, must be sufficient to prove the offending output(s) being signed for different transactions. 
+1. The proof message, by itself, must be sufficient to prove the offending output(s) being signed for different transactions, or in the case of p2sh-multisig, signed more than necessary numbers to allow multiple versions of the same transaction to coexist, breaking unconfirmed chains (subject to BIP62 implementation). 
 2. The proof message, by itself, must not be sufficient to reconstruct the offending transactions in whole unless additional information is relayed.
 3. Generating and relaying proof must not create additional bandwidth and processing requirement for nodes above O(n) where n is existing transaction traffic in the worst case. 
 4. Node wallets and SPV wallets should be able to conclude from the absence of a DS proof over a tolerated time t before next block, that a protected transaction has been relayed to all mempools of the "honest" public network following rules no more stringent than prevailing relay rules, and no alternative was able to supercede the transaction in question in terms of first-seen.
@@ -47,15 +47,33 @@ A second type that addresses p2sh-multisignature transactions is structured as f
 
 | Field Size | Description | Data Type  | Comments |
 | -----------|:-----------:| ----------:|---------:|
-| 1 | version | uint8 | version byte; 2 for p2sh-multisig |
+| 1 | version | uint8 | version byte; 2 for p2sh-multisig double-signing proof |
 | 1 | pk_seq1 | uint8 | "sequence" number that points to which pubkey in checkmultisig the first signature pertains to |
 | 1 | pk_seq2 | uint8 | "sequence" number that points to which pubkey in checkmultisig the second signature pertains to. May be identical to pk_seq1. |
 | ? | tx_dig1 | tx_dig | Transaction digest of the one transaction before final double SHA256 hash, corresponding to the doublespent outpoint|
 | ? | tx_dig2 | tx_dig | Transaction digest of a different transaction before final double SHA256 hash, corresponding to the doublespent outpoint|
-| ? | sig1 | char | signature of the double-SHA256 of tx_dig1, extracted from tx1 |
-| ? | sig2 | char | signature of the double-SHA256 of tx_dig2, extracted from tx2 |
+| ? | sig1 | char | signature of the double-SHA256 of tx_dig1, extracted from tx1 and signed by pubkey from pk_seq1 |
+| ? | sig2 | char | signature of the double-SHA256 of tx_dig2, extracted from tx2 and signed by pubkey from pk_seq2 |
 
 For tx_dig, refer to https://github.com/bitcoincashorg/bitcoincash.org/blob/master/spec/replay-protected-sighash.md.
+
+A third type of proof that also pertains to p2sh-multisignature transactions is structured as follows. It contains strictly m+1 signatures where the associated transaction is m-of-n p2sh-multisig. This type is only relevant upon complete implementation of BIP62.
+
+| Field Size | Description | Data Type  | Comments |
+| -----------|:-----------:| ----------:|---------:|
+| 1 | version | uint8 | version byte; 3 for p2sh-multisig m+1 proof |
+| 1 | pk_seq1 | uint8 | "sequence" number that points to which pubkey in checkmultisig the first signature pertains to |
+| 1 | pk_seq2 | uint8 | "sequence" number that points to which pubkey in checkmultisig the second signature pertains to. May **not** be identical to pk_seq1. |
+| ... | ... | ... | ... | 
+| 1 | pk_seq m+1 | uint8 | "sequence" number that points to which pubkey in checkmultisig the m+1 signature pertains to. All pubkeys must be unique. |
+| ? | tx_dig1 | tx_dig | Transaction digest of one transaction before final double SHA256 hash, corresponding to the doublespent outpoint |
+| ? | tx_dig2 | tx_dig | Transaction digest of one transaction before final double SHA256 hash, corresponding to the same outpoint. If identical to another tx_dig before it, replaced by an uint8 number that refers to the sequence of the previous tx_dig. |
+| ... | ... | ... | ... | 
+| ? | tx_dig m+1 | tx_dig | Transaction digest of one transaction before final double SHA256 hash, corresponding to the same outpoint. May be identical to any of previous tx_dig. If identical to another tx_dig before it, replaced by an uint8 number that refers to the sequence of the previous tx_dig. |
+| ? | sig1 | char | signature of the double-SHA256 of tx_dig1, signed by pubkey from pk_seq1 |
+| ? | sig2 | char | signature of the double-SHA256 of tx_dig2, signed by pubkey from pk_seq2 |
+| ... | ... | ... | ... | 
+| ? | sig m+1 | char | signature of the double-SHA256 of tx_dig m+1, signed by pubkey from pk_seq m+1 |
 
 A message type 'dsproof_req' is structured as follows:
 
@@ -73,9 +91,15 @@ The inventory vector hash shall be set to the hash of the serialized outpoint wh
 
 ## Message Generation and Relaying
 
-The proof must be only generated when at least two different valid transactions spending at least one identical output, at least one of them being a protected transaction, are detected; it must not be forged otherwise. Note that two transactions are considered different if they contain different signatures, even if their transaction digests are exactly the same. In the case of multisignature, any pubkey signing a different transaction spending the same outpoint as a protected transaction is sufficient proof.
+The proof must be only generated when:
 
-When a node detects two transactions that spends the same outpoint, AND at least one of the transactions is a protected transaction, it should check to see if it has a double spend proof to that outpoint in inventory.
+1. At least two different valid transactions spending at least one identical output, at least one of them being a protected transaction, are detected (generates type 1 or type 2 proof); or
+
+2. A P2SH-multisig input that requires m of n signatures from unique pubkeys has more than m signatures through any number of transactions spending the same outpoint (generates type 3 proof). 
+
+it must not be forged otherwise. Note that two transactions are considered different if they contain different signatures, even if their transaction digests are exactly the same. In the case of multisignature, any pubkey signing a different transaction spending the same outpoint as a protected transaction is sufficient proof.
+
+When a node detects two transactions that spends the same outpoint, AND at least one of the transactions is a protected transaction, or a P2SH-multisig input containing more than necessary signatures (requires BIP62), it should check to see if it has a double spend proof to that outpoint in inventory.
 If not it should construct a `dsproof` message for the outpoint and announce to its peers via `inv` packets.
 
 When receiving an `inv` packet for a double spend proof a node should:
@@ -87,7 +111,7 @@ When receiving an `inv` packet for a double spend proof a node should:
 
 The validation of the double spend proof fails if:
 
-* The double spent `outpoint` is not in `tx_dig1` or `tx_dig2` of the proof.
+* Any one of the tx_digs in proof do not contain the double spent `outpoint`.
 * The signature for any of the transaction digests is invalid.
 
 If validation is successful the node should announce and relay the `dsproof` message to its peers.
