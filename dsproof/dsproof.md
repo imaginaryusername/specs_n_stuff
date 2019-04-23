@@ -2,7 +2,7 @@
 
 @im_uname
 WIP
-Last revised: 20190412
+Last revised: 20190423
 
 Author: @im_uname, adapted from Chris Pacia's Double Spend Alert (https://github.com/cpacia/spec/blob/master/double-spend-alerts.md) 
 
@@ -156,6 +156,20 @@ Double spend proofs are useful against an adversary who does not collude with a 
 
 As of current version of this spec, nodes that are more stringent in relay criteria will not be able to generate doublespend proofs on its own if a doublespend transaction outside its relay criteria is present on the network; it will rely on its more permissive peers to do so. This reduces denial of service attack surfaces and may increase the willingness of node operators to relay proof at all, as proof generation criteria is aligned with relay policy. However, this may lead to increased latency and less robust generation in scenarios of low participation (TODO:simulate).
 
-TODO: Explanation for specs, attack scenarios
+## Tests (WIP)
+
+### Generation
+
+P2PKH
+
+P2SH-multisig
+
+### Verification
+
+### Merchant-end flagging
+
+From confirmed
+
+Unconfirmed parent
 
 Thanks to Tom Zander, Mark Lundeberg, Peter Rizun, Andrew Stone, Dagur, Greg Griffith for feedback and initial reworks; Jonathan Silverblood and Chris Pacia for additional comments; thanks to Tom Harding for providing the inspiration and initial framework in tackling different doublespend types. 
