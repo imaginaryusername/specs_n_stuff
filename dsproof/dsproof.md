@@ -112,7 +112,9 @@ When receiving an `inv` packet for a double spend proof a node should:
 The validation of the double spend proof fails if:
 
 * Any one of the tx_digs in proof do not contain the double spent `outpoint`.
-* The signature for any of the transaction digests is invalid.
+* The signature for any of the transaction digests is invalid under current consensus rules (either cryptographically invalid, or fails DERSIG, STRICTENC, LOW_S rules).
+* Ths two halves of the doublespend proof are identical in the case of Type 1 and Type 2.
+* In the case of Type 3, any two of the public keys supplied are identical.
 
 If validation is successful the node should announce and relay the `dsproof` message to its peers.
 
