@@ -2,8 +2,7 @@
 
 @im_uname
 WIP
-Last revised: 20190423
-
+Last revised: 20190729
 Author: @im_uname, adapted from Chris Pacia's Double Spend Alert (https://github.com/cpacia/spec/blob/master/double-spend-alerts.md) 
 
 ## Abstract
@@ -39,7 +38,7 @@ If the two transaction share more than one outpoint, then a corresponding number
 | -----------|:-----------:| ----------:|---------:|
 | 1 | version | uint8 | version byte |
 | 184 | tx_pre1 | tx_sig_preimage | Signed data from tx1's CHECKSIG execution (includes outpoint). |
-| 184 | tx_pre2 | tx_sig_preimage | Signed data from tx1's CHECKSIG execution (includes outpoint). |
+| 184 | tx_pre2 | tx_sig_preimage | Signed data from tx2's CHECKSIG execution (includes outpoint). |
 | 1 | len1 | uint8 | length of sig1 |
 | ? | sig1 | bytearray | ECDSA/Schnorr signature on the double-SHA256 of tx_pre1, extracted from tx1 |
 | 1 | len2 | uint8 | length of sig2 |
@@ -54,10 +53,12 @@ A second type that addresses p2sh-multisignature transactions is structured as f
 | 1 | version | uint8 | version byte; 2 for p2sh-multisig double-signing proof |
 | 1 | pk_seq1 | uint8 | "sequence" number that points to which pubkey in checkmultisig the first signature pertains to |
 | 1 | pk_seq2 | uint8 | "sequence" number that points to which pubkey in checkmultisig the second signature pertains to. May be identical to pk_seq1. |
-| ? | tx_dig1 | tx_dig | Transaction digest of the one transaction before final double SHA256 hash, corresponding to the doublespent outpoint|
-| ? | tx_dig2 | tx_dig | Transaction digest of a different transaction before final double SHA256 hash, corresponding to the doublespent outpoint|
-| ? | sig1 | char | signature of the double-SHA256 of tx_dig1, extracted from tx1 and signed by pubkey from pk_seq1 |
-| ? | sig2 | char | signature of the double-SHA256 of tx_dig2, extracted from tx2 and signed by pubkey from pk_seq2 |
+| 184 | tx_pre1 | tx_sig_preimage | Signed data from tx1's CHECKMULTISIG execution (includes outpoint). |
+| 184 | tx_pre2 | tx_sig_preimage | Signed data from tx2's CHECKMULTISIG execution (includes outpoint).|
+| 1 | len1 | uint8 | length of sig1 |
+| ? | sig1 | bytearray | signature of the double-SHA256 of tx_pre1, extracted from tx1 and signed by pubkey from pk_seq1 |
+| 1 | len2 | uint8 | length of sig2 |
+| ? | sig2 | bytearray | signature of the double-SHA256 of tx_pre2, extracted from tx2 and signed by pubkey from pk_seq2 |
 
 For tx_sig_preimage, refer to https://github.com/bitcoincashorg/bitcoincash.org/blob/master/spec/replay-protected-sighash.md.
 
@@ -70,14 +71,16 @@ A third type of proof that also pertains to p2sh-multisignature transactions is 
 | 1 | pk_seq2 | uint8 | "sequence" number that points to which pubkey in checkmultisig the second signature pertains to. May **not** be identical to pk_seq1. |
 | ... | ... | ... | ... | 
 | 1 | pk_seq m+1 | uint8 | "sequence" number that points to which pubkey in checkmultisig the m+1 signature pertains to. All pubkeys must be unique. |
-| ? | tx_dig1 | tx_dig | Transaction digest of one transaction before final double SHA256 hash, corresponding to the doublespent outpoint |
-| ? | tx_dig2 | tx_dig | Transaction digest of one transaction before final double SHA256 hash, corresponding to the same outpoint. If identical to another tx_dig before it, replaced by an uint8 number that refers to the sequence of the previous tx_dig. |
+| 184 | tx_pre1 | tx_sig_preimage | Signed data from tx1's CHECKMULTISIG operation. |
+| 184 | tx_pre2 | tx_sig_preimage | Signed data from tx2's CHECKMULTISIG operation, or if tx2 is tx1, replaced by an uint8 number that refers to the sequence of the previous tx_pre1. Corresponds to sig2 below. |
 | ... | ... | ... | ... | 
-| ? | tx_dig m+1 | tx_dig | Transaction digest of one transaction before final double SHA256 hash, corresponding to the same outpoint. May be identical to any of previous tx_dig. If identical to another tx_dig before it, replaced by an uint8 number that refers to the sequence of the previous tx_dig. |
-| ? | sig1 | char | signature of the double-SHA256 of tx_dig1, signed by pubkey from pk_seq1 |
-| ? | sig2 | char | signature of the double-SHA256 of tx_dig2, signed by pubkey from pk_seq2 |
+| 184 | tx_pre m+1 | tx_sig_preimage | Signed data from tx2's CHECKMULTISIG operation, or if tx2 is identical to any tx before, replaced by an uint8 number that refers to the sequence of the previous tx_pre. Corresponds to sig m+1 below. |
+| 1 | len1 | uint8 | length of sig1 |
+| ? | sig1 | bytearray | signature by pubkey from pk_seq1 |
+| 1 | len2 | uint8 | length of sig2 |
+| ? | sig2 | bytearray | signature by pubkey from pk_seq2 |
 | ... | ... | ... | ... | 
-| ? | sig m+1 | char | signature of the double-SHA256 of tx_dig m+1, signed by pubkey from pk_seq m+1 |
+| ? | sig m+1 | bytearray | signature by pubkey from pk_seq m+1 |
 
 A message type 'dsproof_req' is structured as follows:
 
