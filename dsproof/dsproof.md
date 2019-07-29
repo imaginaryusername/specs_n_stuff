@@ -37,11 +37,15 @@ If the two transaction share more than one outpoint, then a corresponding number
 
 | Field Size | Description | Data Type  | Comments |
 | -----------|:-----------:| ----------:|---------:|
-| 1 | version | uint8 | version byte; 1 for p2pkh |
-| ? | tx_dig1 | tx_dig | Transaction digest of the one transaction before final double SHA256 hash, corresponding to the doublespent outpoint|
-| ? | tx_dig2 | tx_dig | Transaction digest of a different transaction before final double SHA256 hash, corresponding to the doublespent outpoint|
-| ? | sig1 | char | signature of the double-SHA256 of tx_dig1, extracted from tx1 |
-| ? | sig2 | char | signature of the double-SHA256 of tx_dig2, extracted from tx2 |
+| 1 | version | uint8 | version byte |
+| 184 | tx_pre1 | tx_sig_preimage | Signed data from tx1's CHECKSIG execution (includes outpoint). |
+| 184 | tx_pre2 | tx_sig_preimage | Signed data from tx1's CHECKSIG execution (includes outpoint). |
+| 1 | len1 | uint8 | length of sig1 |
+| ? | sig1 | bytearray | ECDSA/Schnorr signature on the double-SHA256 of tx_pre1, extracted from tx1 |
+| 1 | len2 | uint8 | length of sig2 |
+| ? | sig2 | bytearray | ECDSA/Schnorr signature on the double-SHA256 of tx_pre2, extracted from tx2 |
+
+For tx_sig_preimage, refer to https://github.com/bitcoincashorg/bitcoincash.org/blob/master/spec/replay-protected-sighash.md.
 
 A second type that addresses p2sh-multisignature transactions is structured as follows: 
 
@@ -55,7 +59,7 @@ A second type that addresses p2sh-multisignature transactions is structured as f
 | ? | sig1 | char | signature of the double-SHA256 of tx_dig1, extracted from tx1 and signed by pubkey from pk_seq1 |
 | ? | sig2 | char | signature of the double-SHA256 of tx_dig2, extracted from tx2 and signed by pubkey from pk_seq2 |
 
-For tx_dig, refer to https://github.com/bitcoincashorg/bitcoincash.org/blob/master/spec/replay-protected-sighash.md.
+For tx_sig_preimage, refer to https://github.com/bitcoincashorg/bitcoincash.org/blob/master/spec/replay-protected-sighash.md.
 
 A third type of proof that also pertains to p2sh-multisignature transactions is structured as follows. It contains strictly m+1 signatures where the associated transaction is m-of-n p2sh-multisig. This type is only relevant upon complete implementation of BIP62.
 
@@ -111,8 +115,8 @@ When receiving an `inv` packet for a double spend proof a node should:
 
 The validation of the double spend proof fails if:
 
-* Any one of the tx_digs in proof do not contain the double spent `outpoint`.
-* The signature for any of the transaction digests is invalid under current consensus rules (either cryptographically invalid, or fails DERSIG, STRICTENC, LOW_S rules).
+* The double spent `outpoint` is not in `tx_pre1` or `tx_pre2` of the proof.
+* The signature for any of the transaction digests is invalid.
 * Ths two halves of the doublespend proof are identical in the case of Type 1 and Type 2.
 * In the case of Type 3, any two of the public keys supplied are identical.
 
