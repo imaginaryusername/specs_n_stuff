@@ -22,79 +22,42 @@ A transaction that has its inputs all being from P2PKH or P2SH-multisig outputs,
 
 ## Specification
 
-
-The `dsproof` command generates the following, with two different transactions spending the same outpoint as input:
-
-| Field Size | Description | Data Type  | Comments |
-| -----------|:-----------:| ----------:|---------:|
-| 36     | outpoint | outpoint | The outpoint that was double spent |
-| ?      | proof | double_spend_proof | Proof a double spend took place |
-
-If the two transaction share more than one outpoint, then a corresponding number of proofs shall be generated for each outpoint shared. This is important for peers that do not have either of the transactions that generated the proof.
-
-`double_spend_proof`:
+The `dsproof` message is defined with the following spec;
 
 | Field Size | Description | Data Type  | Comments |
 | -----------|:-----------:| ----------:|---------:|
-| 1 | version | uint8 | version byte |
-| 184 | tx_pre1 | tx_sig_preimage | Signed data from tx1's CHECKSIG execution (includes outpoint). |
-| 184 | tx_pre2 | tx_sig_preimage | Signed data from tx2's CHECKSIG execution (includes outpoint). |
-| 1 | len1 | uint8 | length of sig1 |
-| ? | sig1 | bytearray | ECDSA/Schnorr signature on the double-SHA256 of tx_pre1, extracted from tx1 |
-| 1 | len2 | uint8 | length of sig2 |
-| ? | sig2 | bytearray | ECDSA/Schnorr signature on the double-SHA256 of tx_pre2, extracted from tx2 |
+| 32 | prevTxId | sha256 | The txid being spent |
+| 4  | prevOutIndex | int | The output being spent |
+| | first_spender | spender | the first sorted spender |
+| | double_spender | spender | the second spender |
 
-For tx_sig_preimage, refer to https://github.com/bitcoincashorg/bitcoincash.org/blob/master/spec/replay-protected-sighash.md.
+Each `spender` is build from a single input from a transaction. Each
+of these inputs spends the same output, indicated by prevTxId/prevOutIndex.
+This means that both signatuers can be validated with the same public key.
 
-A second type that addresses p2sh-multisignature transactions is structured as follows: 
-
-| Field Size | Description | Data Type  | Comments |
-| -----------|:-----------:| ----------:|---------:|
-| 1 | version | uint8 | version byte; 2 for p2sh-multisig double-signing proof |
-| 1 | pk_seq1 | uint8 | "sequence" number that points to which pubkey in checkmultisig the first signature pertains to |
-| 1 | pk_seq2 | uint8 | "sequence" number that points to which pubkey in checkmultisig the second signature pertains to. May be identical to pk_seq1. |
-| 184 | tx_pre1 | tx_sig_preimage | Signed data from tx1's CHECKMULTISIG execution (includes outpoint). |
-| 184 | tx_pre2 | tx_sig_preimage | Signed data from tx2's CHECKMULTISIG execution (includes outpoint).|
-| 1 | len1 | uint8 | length of sig1 |
-| ? | sig1 | bytearray | signature of the double-SHA256 of tx_pre1, extracted from tx1 and signed by pubkey from pk_seq1 |
-| 1 | len2 | uint8 | length of sig2 |
-| ? | sig2 | bytearray | signature of the double-SHA256 of tx_pre2, extracted from tx2 and signed by pubkey from pk_seq2 |
-
-For tx_sig_preimage, refer to https://github.com/bitcoincashorg/bitcoincash.org/blob/master/spec/replay-protected-sighash.md.
-
-A third type of proof that also pertains to p2sh-multisignature transactions is structured as follows. It contains strictly m+1 signatures where the associated transaction is m-of-n p2sh-multisig. This type is only relevant upon complete implementation of BIP62.
+The details required to validate one input are provided in the spender field;
 
 | Field Size | Description | Data Type  | Comments |
 | -----------|:-----------:| ----------:|---------:|
-| 1 | version | uint8 | version byte; 3 for p2sh-multisig m+1 proof |
-| 1 | pk_seq1 | uint8 | "sequence" number that points to which pubkey in checkmultisig the first signature pertains to |
-| 1 | pk_seq2 | uint8 | "sequence" number that points to which pubkey in checkmultisig the second signature pertains to. May **not** be identical to pk_seq1. |
-| ... | ... | ... | ... | 
-| 1 | pk_seq m+1 | uint8 | "sequence" number that points to which pubkey in checkmultisig the m+1 signature pertains to. All pubkeys must be unique. |
-| 184 | tx_pre1 | tx_sig_preimage | Signed data from tx1's CHECKMULTISIG operation. |
-| 184 | tx_pre2 | tx_sig_preimage | Signed data from tx2's CHECKMULTISIG operation, or if tx2 is tx1, replaced by an uint8 number that refers to the sequence of the previous tx_pre1. Corresponds to sig2 below. |
-| ... | ... | ... | ... | 
-| 184 | tx_pre m+1 | tx_sig_preimage | Signed data from tx2's CHECKMULTISIG operation, or if tx2 is identical to any tx before, replaced by an uint8 number that refers to the sequence of the previous tx_pre. Corresponds to sig m+1 below. |
-| 1 | len1 | uint8 | length of sig1 |
-| ? | sig1 | bytearray | signature by pubkey from pk_seq1 |
-| 1 | len2 | uint8 | length of sig2 |
-| ? | sig2 | bytearray | signature by pubkey from pk_seq2 |
-| ... | ... | ... | ... | 
-| ? | sig m+1 | bytearray | signature by pubkey from pk_seq m+1 |
+| 4 | tx-version | unsigned int | Copy of the transactions version field |
+| 4 | sequence | unsigned int | Copy of the sequence field of the input |
+| 4 | locktime | unsigned int | copy of the transactions locktime field |
+| 32 | hash-prevoutputs | sha256 | Transaction hash of prevoutputs |
+| 32 | hash-sequence | sha256 | Transaction hash of sequences |
+| 32 | hash-outputs | sha256 | Transaction hash of outputs |
+| 1-9 | list-size | var-int | number of items in the push-data list |
+|  | push-data | byte-array | raw byte-array of a push-data. For instance a signature |
 
-A message type 'dsproof_req' is structured as follows:
-
-| Field Size | Description | Data Type  | Comments |
-| -----------|:-----------:| ----------:|---------:|
-| 36     | outpoint | outpoint | The outpoint that was double spent |
+The fields hash-prevoutputs, hash-sequence and hash-outputs are defined in the following spec;
+https://github.com/bitcoincashorg/bitcoincash.org/blob/master/spec/replay-protected-sighash.md.
 
 A new inventory type is added:
 
 | Value | Name |
 | -----------|:-----------:|
-| 4     | DOUBLE_SPEND_PROOF |
+| 0x94a1 | DOUBLE_SPEND_PROOF |
 
-The inventory vector hash shall be set to the hash of the serialized outpoint which was double spent. This implies that it is possible for two different double spend proofs to share the same hash, but this is OK since we only care about relaying one double spend alert per input - any will do.
+The inventory vector hash is the double-sha256 hash of the serialized double-spend message.
 
 ## Message Generation and Relaying
 
